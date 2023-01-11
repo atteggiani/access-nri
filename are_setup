@@ -94,9 +94,6 @@ fi
 ssh "$host_gadi" rm \~/tmp_are_script
 rm tmp_are_script
 
-# ssh config file
-ssh_config_file=~/.ssh/config
-
 match=$(grep "Host $host_ARE\s*" "$ssh_config_file")
 # If there is no block for the ARE already present in the ssh config file...
 if [[ -z $match ]]; then
@@ -110,8 +107,9 @@ $new_block
 EOF
 else 
 # If the block already exist, substitute it with the new one
-    perl -0777 -i -pe "s/(Host $host_ARE\s*\\n).*(\\n\n*)/\$1$new_block\$2/s" $ssh_config_file
+    perl -0777 -i -pe "s/($host_ARE\s*\n)[\s\S]*?(?=\n\n|Host\s|\z)/\$1$new_block\$2/s" $ssh_config_file
 fi
+
 
 cat <<EOF
 You are ready to connect through VSCode or ssh!
