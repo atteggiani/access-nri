@@ -1,0 +1,159 @@
+#!/bin/bash
+debug=0
+PROGNAME="$0"
+timestamp=$(date +%s)
+# Script created by Davide Marchegiani at ACCESS-NRI (davide.marchegiani@anu.edu.au) to start an interactive session on gadi and connect to it through VSCode (Using the remote-ssh extension) 
+
+ssh_config_file=$HOME/.ssh/config
+
+tmp_script=tmp_script_${timestamp}
+tmp_file=tmp_file_${timestamp}
+
+show_cursor () {
+    tput cvvis
+}
+
+hide_cursor () {
+    tput civis
+}
+
+ermmsg_no_user () {
+    cat << EOF
+Failed to understand the gadi.nci.org.au 'User' from the $ssh_config_file file. 
+To specify a User use the '--user <user>' flag.
+Type $PROGNAME -h for complete usage doc.
+EOF
+exit 2
+}
+
+errmsg_no_config_file () {
+    cat << EOF
+No $ssh_config_file found.
+To specify a custom ssh config file use the '--ssh-config <path to ssh-config file>' flag.
+Type $PROGNAME -h for complete usage doc.
+EOF
+exit 3
+}
+
+ermmsg_multiple_user () {
+    cat << EOF
+Multiple gadi.nci.org.au Users found in the $ssh_config_file file. 
+To specify a User use the '--user <user>' flag.
+Type $PROGNAME -h for complete usage doc.
+EOF
+exit 4
+}
+
+errmsg_gadi_connection () {
+    cat << EOF
+Impossible to connect to $1. Check your $ssh_config_file file.
+EOF
+[[ $debug == 1 ]] || rm -f $HOME/$tmp_script
+exit 5
+}
+
+errmsg_qsub () {
+    cat <<EOF
+Failed to submit job. Check qsub options.
+EOF
+[[ $debug == 1 ]] || ssh $1 "rm -f \$HOME/$tmp_script"
+show_cursor
+exit 6
+}
+
+# If a config file exists
+if [[ -f "$ssh_config_file" ]]; then
+    # Get gadi User
+    user=$(cat $ssh_config_file | tr '\n' ' ' | awk 'BEGIN { FS = "Host " } ; { for (i=1; i<=NF; i++) { if ($i ~ /[ \t]+[^#]*[ \t]+Hostname[ \t]+gadi\.nci\.org\.au[ \t]+/) { print $i }}}' | grep -Po ".*?User[ \t]*\K\S*")
+    # If no user found raise error
+    [[ -z "$user" ]] && ermmsg_no_user
+    # If more than one user found raise error
+    [[ -z $(echo $user | grep -P "\s") ]] || ermmsg_multiple_user
+else
+    # If no config file raise error
+    errmsg_no_config_file    
+fi
+
+host_gadi=${user}@gadi.nci.org.au
+
+# write tmp script to start interactive session and get ssh configuration on gadi
+cat > $HOME/$tmp_script <<EOFF
+#!/bin/bash
+
+# PBS options
+project=\$PROJECT
+walltime=09:00:00
+ncpus=2
+mem=9GB
+storage=gdata/hh5+gdata/tm70+gdata/access+gdata/w40+scratch/tm70+scratch/public+scratch/w40
+name=${timestamp}_interactive_session
+
+command="qsub -I -X -q normalbw -N \${name} -P \$project -lwalltime=\${walltime},ncpus=\${ncpus},mem=\${mem},storage=\${storage}"
+
+echo "Interactive session requested"
+tmux new -d -s tmux_sess_${timestamp} "\$command"
+
+# Wait until interactive sessions starts
+sleep 0.5
+k=5
+while true
+do
+    status=\$(qstat -f | tr '\n' ' ' | grep -Po "Job_Name = \${name}.*?job_state = \K.*?\S")
+    if [[ -z \$status ]]; then
+        exit 6
+    elif [[ \$status == R ]]; then
+        echo -e "\033[2K\rInteractive session started!"
+        break
+    else
+        if [[ \$k == 5 ]]; then
+            echo -ne "\033[2K\rWaiting for interactive session to start"
+            k=0
+        else
+            echo -n "."
+        fi
+	((k++))       
+    fi
+    sleep 0.8
+done
+
+# Get hostname
+hostname=\$(qstat -f | tr '\n' ' ' | grep -Po "Job_Name = \${name}.*?exec_host = \K.*?(?=/)")
+cat > \$HOME/$tmp_file <<< \$hostname
+EOFF
+
+
+# Copy the tmp script
+scp $HOME/$tmp_script ${host_gadi}:~/ > /dev/null || errmsg_gadi_connection $host_gadi
+[[ $debug == 1 ]] || rm -f $HOME/$tmp_script
+
+# run the tmp script on gadi
+hide_cursor
+ssh -X $host_gadi "chmod u+x \$HOME/$tmp_script; \$HOME/$tmp_script" || errmsg_qsub $host_gadi 
+# delete tmp_script on gadi
+[[ $debug == 1 ]] || ssh $host_gadi "rm -f \$HOME/$tmp_script"
+show_cursor
+
+hostname=$(ssh $host_gadi "cat \$HOME/$tmp_file ; [[ $debug == 1 ]] || rm -f \$HOME/$tmp_file")
+gadi_home=$(ssh $host_gadi "echo \$HOME")
+echo "Hostname: ${hostname}.gadi.nci.org.au"
+
+# # If it's possible to run a Proxyjump directly from CLI via vscode use something like this:
+# # echo "code --folder-uri vscode-remote://ssh-remote+-J+${user}@gadi.nci.org.au+${user}@${hostname}.gadi.nci.org.au"
+
+# # Otherwise, include another config file in the ssh-config file, with the specifications of the connection
+
+cat > $HOME/tmp_config <<EOF
+Host interactive_session_${timestamp}
+        ProxyJump ${user}@gadi.nci.org.au
+        User ${user}
+        ForwardX11 true
+        ForwardX11Trusted yes
+        Hostname ${hostname}
+EOF
+
+cat >> $ssh_config_file <<< "Include $HOME/tmp_config"
+# Open VSCode
+code --folder-uri "vscode-remote://ssh-remote+interactive_session_${timestamp}/${gadi_home}"
+
+# # Create log file to output stout and sterr from qsub
+
