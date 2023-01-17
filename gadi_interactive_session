@@ -1,10 +1,229 @@
 #!/bin/bash
-debug=0
-PROGNAME="$0"
-timestamp=$(date +%s)
-# Script created by Davide Marchegiani at ACCESS-NRI (davide.marchegiani@anu.edu.au) to start an interactive session on gadi and connect to it through VSCode (Using the remote-ssh extension) 
 
-ssh_config_file=$HOME/.ssh/config
+# Script created by Davide Marchegiani at ACCESS-NRI (davide.marchegiani@anu.edu.au) to start an interactive session on gadi
+# and connect to it through VSCode (Using the remote-ssh extension) 
+
+PROGNAME="$0"
+# PROGNAME=$(readlink -f "$0")
+
+usage() {
+  cat << EOF
+
+Script to start an interactive session on gadi and connect to it through VSCode (using VSCode remote-ssh extension).
+
+Usage: $PROGNAME [ PBS-directives ] [ --user <Gadi User> ] [ --ssh-config <ssh-config file> ] [ --debug ] [ --help ]
+
+Keywords:
+    --user <Gadi User> 
+        Specify the Username to connect to Gadi.
+
+    --ssh-config <ssh-config file>
+        Specify the ssh-config file to get the Username for the connection to Gadi.
+
+    --debug
+        Activate debug mode.
+
+    -h, --help
+        Print this manual.
+
+    PBS-directives
+        The following options are taken from the PBS-directives:
+        
+        -P <project>
+            The project which you want to charge the interactive job resource usage to. 
+            If missing, it is set to the default project in the shell environment from which the job is submitted.
+
+        -q <queue>
+            The queue to run the interactive job in.
+            If missing, it is set to 'normalbw'.
+            Different queues have different limits of the amount of resources can be requested using the '-l' flag.
+
+        -l walltime=<HH:MM:SS>
+            The wall clock time limit for the interactive job. Time is expressed in the form:[[hours:]minutes:]seconds.
+            If missing, it is set to 01:00:00. 
+
+        -l storage=<scratch/a00+gdata/xy11+massdata/a00>
+            Identifies the specific filesystems that the interactive job will need access to. It is expressed as a plus-separated 
+            list of identifiers of the form <filesystem>/<project>. 
+            The valid filesystems are currently scratch (for Gadi's /scratch  filesystem), gdata (for Gadi's /g/data filesystem), and massdata. 
+            All jobs implicitly have scratch/<project> and gdata/<project> included in this list, where <project> is the project that the interactive
+            job is running under. Locations that are not specified via this directive will not be available inside the interactive job, and will result
+            in, for example, "file not found" errors if you attempt to access them.
+
+        -l mem=<9GB>
+            The total memory limit for the interactive job's usage. 
+            If missing, the value is set to 9GB.
+
+        -l ncpus=<2>
+            The number of CPU cores to allocate to the interactive job. 
+            If missing, the value is set to 2. 
+
+        -l ngpus=<4>
+            The number of GPU devices to allocate to the interactive job (for jobs in the gpuvolta queue).
+
+        -l jobfs=<100MB>
+            The maximum amount of local disk available to the interactive job on the hosting compute nodes.
+            If missing, the value is set to 100MB.
+
+        -M <user@example.com>
+            The list of addresses to which emails about the interactive job will be sent.
+
+        -m <abe>
+            The set of conditions under which email about the interactive job is sent.
+            It may be any combination of "a" for when the job is aborted by batch system, "b" for when the job begins execution,
+            and "e" for when the job ends execution.
+
+        -N <jobName>
+            The name of the interactive job. 
+            By default it is set to <timestamp>_interactive_session, with timestamp being generated at the time of submission of the interactive job.
+EOF
+  exit 1
+}
+
+while getopts "hP:q:l:M:m:N:-:I" opt; do
+    case $opt in
+        -)  
+            case $OPTARG in
+                user)
+                    if ! [[ -z ${!OPTIND} ]]; then
+                        user=${!OPTIND}
+                        shift 
+                    else
+                        echo "${PROGNAME}: option requires an argument -- ${OPTARG}"
+                        echo "Use option -h for the complete manual."
+                    fi
+                ;;
+                ssh-config)
+                    if ! [[ -z ${!OPTIND} ]]; then
+                        ssh_config_file=${!OPTIND}
+                        shift 
+                    else
+                        echo "${PROGNAME}: option requires an argument -- ${OPTARG}"
+                        echo "Use option -h for the complete manual."
+                    fi
+                ;;
+                debug)
+                    debug=1
+                    shift
+                ;;
+                help)
+                    usage
+                ;;
+                *)
+                    echo "${PROGNAME}: illegal option -- ${OPTARG}"
+                    echo "Use option -h for the complete manual."
+                ;;
+            esac
+        ;;
+        P)
+            project="$OPTARG"
+            pbs_options+="-${opt} $OPTARG "
+        ;;
+        q)
+            queue=$OPTARG
+            pbs_options+="-${opt} $OPTARG "
+        ;;
+        N)
+            name=$OPTARG
+            pbs_options+="-${opt} $OPTARG "
+        ;;
+        [Mm]) 
+            pbs_options+="-${opt} $OPTARG "
+        ;;
+        l)
+            grep -P "[ \t]" <<< "$OPTARG" > /dev/null && echo -e "'-l' directives cannot contain spaces or tabs.\nIf you need to declare multiple '-l' directives, please separate them with a comma."
+            for option in $(awk 'BEGIN { FS="," } ; { for (i=1; i<=NF; i++) { print($i) }}' <<< "$OPTARG")
+            do  
+                if ! [[ -z $(grep -Po "^walltime=\K.*" <<< $option) ]]; then
+                    if [[ -z $walltime ]]; then
+                        walltime=$(grep -Po "^walltime=\K.*" <<< $option)
+                    else
+                        echo "Multiple '-l walltime' directives specified."
+                        exit 1
+                    fi
+                elif ! [[ -z $(grep -Po "^storage=\K.*" <<< $option) ]]; then
+                    if [[ -z $storage ]]; then
+                        storage=$(grep -Po "^storage=\K.*" <<< $option)
+                    else
+                        echo "Multiple '-l storage' directives specified."
+                        exit 1
+                    fi
+                elif ! [[ -z $(grep -Po "^mem=\K.*" <<< $option) ]]; then
+                    if [[ -z $mem ]]; then
+                        mem=$(grep -Po "^mem=\K.*" <<< $option)
+                    else
+                        echo "Multiple '-l mem' directives specified."
+                        exit 1
+                    fi
+                elif ! [[ -z $(grep -Po "^ncpus=\K.*" <<< $option) ]]; then
+                    if [[ -z $ncpus ]]; then
+                        ncpus=$(grep -Po "^ncpus=\K.*" <<< $option)
+                    else
+                        echo "Multiple '-l ncpus' directives specified."
+                        exit 1
+                    fi
+                elif ! [[ -z $(grep -Po "^ngpus=\K.*" <<< $option) ]]; then
+                    if [[ -z $ngpus ]]; then
+                        ngpus=$(grep -Po "^ngpus=\K.*" <<< $option)
+                    else
+                        echo "Multiple '-l ngpus' directives specified."
+                        exit 1
+                    fi
+                elif ! [[ -z $(grep -Po "^jobfs=\K.*" <<< $option) ]]; then
+                    if [[ -z $jobfs ]]; then
+                        jobfs=$(grep -Po "^jobfs=\K.*" <<< $option)
+                    else
+                        echo "Multiple '-l jobfs' directives specified."
+                        exit 1
+                    fi
+                else
+                    echo "PBS '-l $option' directive not supported"
+                    exit 1
+                fi
+                pbs_options+="-${opt} $option "
+            done
+        ;;
+        I)
+        ;;
+        h) 
+            usage
+        ;;
+    esac
+done
+timestamp=$(date +%s)
+
+# DEFAULT VALUES
+# If not in debug state, set debug=0
+[[ -z "$debug" ]] && debug=0
+# If no ssh-config file specified, set ssh-config file to ~/.ssh/config
+[[ -z "$ssh_config_file" ]] && ssh_config_file=$HOME/.ssh/config
+# If queue is not specified, use 'normalbw'
+if [[ -z "$queue" ]]; then
+    queue=normalbw
+    pbs_options+="-q $queue "
+fi
+# If name is not specified, set to ${timestamp}_interactive_session
+if [[ -z "$name" ]]; then
+    name=${timestamp}_interactive_session
+    pbs_options+="-N $name "
+fi
+# If walltime is not specified, set to 01:00:00
+if [[ -z "$walltime" ]]; then
+    walltime=01:00:00
+    pbs_options+="-l walltime=$walltime "
+fi
+# If ncpus is not specified, set to 2
+if [[ -z "$ncpus" ]]; then
+    ncpus=2
+    pbs_options+="-l ncpus=$ncpus "
+fi
+# If mem is not specified, set to 9GB
+if [[ -z "$mem" ]]; then
+    mem=9GB
+    pbs_options+="-l mem=$mem "
+fi
+# Add -I and -X to PBS options
+pbs_options+="-I -X"
 
 tmp_script=tmp_script_${timestamp}
 tmp_file=tmp_file_${timestamp}
@@ -61,36 +280,29 @@ show_cursor
 exit 6
 }
 
-# If a config file exists
-if [[ -f "$ssh_config_file" ]]; then
-    # Get gadi User
-    user=$(cat $ssh_config_file | tr '\n' ' ' | awk 'BEGIN { FS = "Host " } ; { for (i=1; i<=NF; i++) { if ($i ~ /[ \t]+[^#]*[ \t]+Hostname[ \t]+gadi\.nci\.org\.au[ \t]+/) { print $i }}}' | grep -Po ".*?User[ \t]*\K\S*")
-    # If no user found raise error
-    [[ -z "$user" ]] && ermmsg_no_user
-    # If more than one user found raise error
-    [[ -z $(echo $user | grep -P "\s") ]] || ermmsg_multiple_user
-else
-    # If no config file raise error
-    errmsg_no_config_file    
+if [[ -z $user ]]; then
+    # If a config file exists
+    if [[ -f "$ssh_config_file" ]]; then
+        # Get gadi User
+        user=$(cat $ssh_config_file | tr '\n' ' ' | awk 'BEGIN { FS = "Host " } ; { for (i=1; i<=NF; i++) { if ($i ~ /[ \t]+[^#]*[ \t]+Hostname[ \t]+gadi\.nci\.org\.au[ \t]+/) { print $i }}}' | grep -Po ".*?User[ \t]*\K\S*")
+        # If no user found raise error
+        [[ -z "$user" ]] && ermmsg_no_user
+        # If more than one user found raise error
+        [[ -z $(echo $user | grep -P "\s") ]] || ermmsg_multiple_user
+    else
+        # If no config file raise error
+        errmsg_no_config_file    
+    fi
 fi
-
 host_gadi=${user}@gadi.nci.org.au
 
 # write tmp script to start interactive session and get ssh configuration on gadi
 cat > $HOME/$tmp_script <<EOFF
 #!/bin/bash
 
-# PBS options
-project=\$PROJECT
-walltime=09:00:00
-ncpus=2
-mem=9GB
-storage=gdata/hh5+gdata/tm70+gdata/access+gdata/w40+scratch/tm70+scratch/public+scratch/w40
-name=${timestamp}_interactive_session
+command="qsub $pbs_options"
 
-command="qsub -I -X -q normalbw -N \${name} -P \$project -lwalltime=\${walltime},ncpus=\${ncpus},mem=\${mem},storage=\${storage}"
-
-echo "Interactive session requested"
+echo "Interactive session requested with the following directives: '$pbs_options'"
 tmux new -d -s tmux_sess_${timestamp} "\$command"
 
 # Wait until interactive sessions starts
