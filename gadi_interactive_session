@@ -11,7 +11,7 @@ usage() {
 
 Script to start an interactive session on gadi and connect to it through VSCode (using VSCode remote-ssh extension).
 
-Usage: $PROGNAME [ PBS-directives ] [ --user <Gadi User> ] [ --ssh-config <ssh-config file> ] [ --debug ] [ --help ]
+Usage: $PROGNAME [ PBS-directives ] [ --user <Gadi User> ] [ --ssh-config <ssh-config file> ] [ --code <path to 'code' executable> ] [ --debug ] [ --help ]
 
 Keywords:
     --user <Gadi User> 
@@ -19,6 +19,9 @@ Keywords:
 
     --ssh-config <ssh-config file>
         Specify the ssh-config file to get the Username for the connection to Gadi.
+
+    --code <path to 'code' executable>
+        Specify VSCode's CLI 'code' executable file, if not in PATH.
 
     --debug
         Activate debug mode.
@@ -90,7 +93,7 @@ while getopts "hP:q:l:M:m:N:-:I" opt; do
                         shift 
                     else
                         echo "${PROGNAME}: option requires an argument -- ${OPTARG}"
-                        echo "Use option -h for the complete manual."
+                        echo "Type $PROGNAME -h for the complete usage doc."
                     fi
                 ;;
                 ssh-config)
@@ -99,7 +102,16 @@ while getopts "hP:q:l:M:m:N:-:I" opt; do
                         shift 
                     else
                         echo "${PROGNAME}: option requires an argument -- ${OPTARG}"
-                        echo "Use option -h for the complete manual."
+                        echo "Type $PROGNAME -h for the complete usage doc."
+                    fi
+                ;;                
+                code)
+                    if ! [[ -z ${!OPTIND} ]]; then
+                        code_bin=${!OPTIND}
+                        shift 
+                    else
+                        echo "${PROGNAME}: option requires an argument -- ${OPTARG}"
+                        echo "Type $PROGNAME -h for the complete usage doc."
                     fi
                 ;;
                 debug)
@@ -111,7 +123,7 @@ while getopts "hP:q:l:M:m:N:-:I" opt; do
                 ;;
                 *)
                     echo "${PROGNAME}: illegal option -- ${OPTARG}"
-                    echo "Use option -h for the complete manual."
+                    echo "Type $PROGNAME -h for the complete usage doc."
                 ;;
             esac
         ;;
@@ -190,6 +202,39 @@ while getopts "hP:q:l:M:m:N:-:I" opt; do
         ;;
     esac
 done
+
+# Check that VSCode and remote-ssh are installed:
+errmsg_no_vscode () {
+    cat << EOF
+VSCode's CLI executable '$1' not found.
+If VSCode is installed, please specify the path to the CLI 'code' executable with:
+$PROGNAME --code <path to 'code' executable>
+Otherwise, please install VSCode --> https://code.visualstudio.com/download
+EOF
+    exit 7
+}
+
+errmsg_no_code_executable () {
+    cat << EOF
+No VSCode '$code_bin' executable found.
+EOF
+    exit 8
+}
+
+if [[ -z "$code_bin" ]]; then
+    code_bin=code
+else
+    [[ -f "$code_bin" ]] || errmsg_no_code_executable
+fi
+    
+code -v &> /dev/null || errmsg_no_vscode $code_bin
+# Check that remote-ssh extension is installed, otherwise install it
+remote_ssh_id=ms-vscode-remote.remote-ssh
+if [[ -z $(code --list-extensions | grep "^$remote_ssh_id$") ]]; then
+    echo -e "No 'remote-ssh' extension found in VSCode."
+    $code_bin --install-extension $remote_ssh_id
+fi
+
 timestamp=$(date +%s)
 
 # DEFAULT VALUES
@@ -240,7 +285,7 @@ ermmsg_no_user () {
     cat << EOF
 Failed to understand the gadi.nci.org.au 'User' from the $ssh_config_file file. 
 To specify a User use the '--user <user>' flag.
-Type $PROGNAME -h for complete usage doc.
+Type $PROGNAME -h for the complete usage doc.
 EOF
 exit 2
 }
@@ -249,7 +294,7 @@ errmsg_no_config_file () {
     cat << EOF
 No $ssh_config_file found.
 To specify a custom ssh config file use the '--ssh-config <path to ssh-config file>' flag.
-Type $PROGNAME -h for complete usage doc.
+Type $PROGNAME -h for the complete usage doc.
 EOF
 exit 3
 }
@@ -258,7 +303,7 @@ ermmsg_multiple_user () {
     cat << EOF
 Multiple gadi.nci.org.au Users found in the $ssh_config_file file. 
 To specify a User use the '--user <user>' flag.
-Type $PROGNAME -h for complete usage doc.
+Type $PROGNAME -h for the complete usage doc.
 EOF
 exit 4
 }
@@ -280,6 +325,7 @@ show_cursor
 exit 6
 }
 
+# If User was not specified
 if [[ -z $user ]]; then
     # If a config file exists
     if [[ -f "$ssh_config_file" ]]; then
