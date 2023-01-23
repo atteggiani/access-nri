@@ -240,8 +240,6 @@ timestamp=$(date +%s)
 # DEFAULT VALUES
 # If not in debug state, set debug=0
 [[ -z "$debug" ]] && debug=0
-# If no ssh-config file specified, set ssh-config file to ~/.ssh/config
-[[ -z "$ssh_config_file" ]] && ssh_config_file=$HOME/.ssh/config
 # If queue is not specified, use 'normalbw'
 if [[ -z "$queue" ]]; then
     queue=normalbw
@@ -327,6 +325,8 @@ exit 6
 
 # If User was not specified
 if [[ -z $user ]]; then
+    # If no ssh-config file specified, set ssh-config file to ~/.ssh/config
+    [[ -z "$ssh_config_file" ]] && ssh_config_file=$HOME/.ssh/config
     # If a config file exists
     if [[ -f "$ssh_config_file" ]]; then
         # Get gadi User
@@ -348,7 +348,7 @@ cat > $HOME/$tmp_script <<EOFF
 
 command="qsub $pbs_options"
 
-echo "Interactive session requested with the following directives: '$pbs_options'"
+echo -e "Interactive session requested with the following directives:\n'$pbs_options'"
 tmux new -d -s tmux_sess_${timestamp} "\$command"
 
 # Wait until interactive sessions starts
