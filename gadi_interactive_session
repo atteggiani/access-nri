@@ -409,7 +409,7 @@ Host interactive_session_${timestamp}
         Hostname ${hostname}
 EOF
 
-cat >> $ssh_config_file <<< "Include $HOME/tmp_config"
+[[ -z $(cat $ssh_config_file | grep "^Include $HOME/tmp_config$") ]] && cat >> $ssh_config_file <<< "Include $HOME/tmp_config"
 # Open VSCode
 code --folder-uri "vscode-remote://ssh-remote+interactive_session_${timestamp}/${gadi_home}"
 
