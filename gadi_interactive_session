@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Script created by Davide Marchegiani at ACCESS-NRI (davide.marchegiani@anu.edu.au) to start an interactive session on gadi
+# Script created by Davide Marchegiani at ACCESS-NRI (davide.marchegiani@anu.edu.au) to start a session on gadi
 # and connect to it through VSCode (Using the remote-ssh extension) 
 
 PROGNAME="$0"
@@ -9,9 +9,9 @@ PROGNAME="$0"
 usage() {
   cat << EOF
 
-Script to start an interactive session on gadi and connect to it through VSCode (using VSCode remote-ssh extension).
+Script to start a session on gadi and connect to it through VSCode (using VSCode remote-ssh extension).
 
-Usage: $PROGNAME [ PBS-directives ] [ --user <Gadi User> ] [ --ssh-config <ssh-config file> ] [ --code <path to 'code' executable> ] [ --debug ] [ --help ]
+Usage: $PROGNAME [ PBS-directives ] [ --user <Gadi User> ] [ --ssh-config <ssh-config file> ] [ --code <path to 'code' executable> ] [ --help ]
 
 Keywords:
     --user <Gadi User> 
@@ -23,9 +23,6 @@ Keywords:
     --code <path to 'code' executable>
         Specify VSCode's CLI 'code' executable file, if not in PATH.
 
-    --debug
-        Activate debug mode.
-
     -h, --help
         Print this manual.
 
@@ -33,57 +30,57 @@ Keywords:
         The following options are taken from the PBS-directives:
         
         -P <project>
-            The project which you want to charge the interactive job resource usage to. 
+            The project which you want to charge the job resource usage to. 
             If missing, it is set to the default project in the shell environment from which the job is submitted.
 
         -q <queue>
-            The queue to run the interactive job in.
+            The queue to run the job in.
             If missing, it is set to 'normalbw'.
             Different queues have different limits of the amount of resources can be requested using the '-l' flag.
 
         -l walltime=<HH:MM:SS>
-            The wall clock time limit for the interactive job. Time is expressed in the form:[[hours:]minutes:]seconds.
+            The wall clock time limit for the job. Time is expressed in the form:[[hours:]minutes:]seconds.
             If missing, it is set to 01:00:00. 
 
         -l storage=<scratch/a00+gdata/xy11+massdata/a00>
-            Identifies the specific filesystems that the interactive job will need access to. It is expressed as a plus-separated 
+            Identifies the specific filesystems that the job will need access to. It is expressed as a plus-separated 
             list of identifiers of the form <filesystem>/<project>. 
             The valid filesystems are currently scratch (for Gadi's /scratch  filesystem), gdata (for Gadi's /g/data filesystem), and massdata. 
-            All jobs implicitly have scratch/<project> and gdata/<project> included in this list, where <project> is the project that the interactive
-            job is running under. Locations that are not specified via this directive will not be available inside the interactive job, and will result
+            All jobs implicitly have scratch/<project> and gdata/<project> included in this list, where <project> is the project that the
+            job is running under. Locations that are not specified via this directive will not be available inside the job, and will result
             in, for example, "file not found" errors if you attempt to access them.
 
         -l mem=<9GB>
-            The total memory limit for the interactive job's usage. 
+            The total memory limit for the job's usage. 
             If missing, the value is set to 9GB.
 
         -l ncpus=<2>
-            The number of CPU cores to allocate to the interactive job. 
+            The number of CPU cores to allocate to the job. 
             If missing, the value is set to 2. 
 
         -l ngpus=<4>
-            The number of GPU devices to allocate to the interactive job (for jobs in the gpuvolta queue).
+            The number of GPU devices to allocate to the job (for jobs in the gpuvolta queue).
 
         -l jobfs=<100MB>
-            The maximum amount of local disk available to the interactive job on the hosting compute nodes.
+            The maximum amount of local disk available to the job on the hosting compute nodes.
             If missing, the value is set to 100MB.
 
         -M <user@example.com>
-            The list of addresses to which emails about the interactive job will be sent.
+            The list of addresses to which emails about the job will be sent.
 
         -m <abe>
-            The set of conditions under which email about the interactive job is sent.
+            The set of conditions under which email about the job is sent.
             It may be any combination of "a" for when the job is aborted by batch system, "b" for when the job begins execution,
             and "e" for when the job ends execution.
 
         -N <jobName>
-            The name of the interactive job. 
-            By default it is set to <timestamp>_interactive_session, with timestamp being generated at the time of submission of the interactive job.
+            The name of the job. 
+            By default it is set to <timestamp>_session, with timestamp being generated at the time of submission of the job.
 EOF
   exit 1
 }
 
-while getopts "hP:q:l:M:m:N:-:I" opt; do
+while getopts "hP:q:l:M:m:N:-:" opt; do
     case $opt in
         -)  
             case $OPTARG in
@@ -113,10 +110,6 @@ while getopts "hP:q:l:M:m:N:-:I" opt; do
                         echo "${PROGNAME}: option requires an argument -- ${OPTARG}"
                         echo "Type $PROGNAME -h for the complete usage doc."
                     fi
-                ;;
-                debug)
-                    debug=1
-                    shift
                 ;;
                 help)
                     usage
@@ -238,16 +231,14 @@ fi
 timestamp=$(date +%s)
 
 # DEFAULT VALUES
-# If not in debug state, set debug=0
-[[ -z "$debug" ]] && debug=0
 # If queue is not specified, use 'normalbw'
 if [[ -z "$queue" ]]; then
     queue=normalbw
     pbs_options+="-q $queue "
 fi
-# If name is not specified, set to ${timestamp}_interactive_session
+# If name is not specified, set to ${timestamp}_session
 if [[ -z "$name" ]]; then
-    name=${timestamp}_interactive_session
+    name=${timestamp}_session
     pbs_options+="-N $name "
 fi
 # If walltime is not specified, set to 01:00:00
@@ -265,8 +256,6 @@ if [[ -z "$mem" ]]; then
     mem=9GB
     pbs_options+="-l mem=$mem "
 fi
-# Add -I and -X to PBS options
-pbs_options+="-I -X"
 
 tmp_script=tmp_script_${timestamp}
 tmp_file=tmp_file_${timestamp}
@@ -310,7 +299,7 @@ errmsg_gadi_connection () {
     cat << EOF
 Impossible to connect to $1. Check your $ssh_config_file file.
 EOF
-[[ $debug == 1 ]] || rm -f $HOME/$tmp_script
+rm -f $HOME/$tmp_script
 exit 5
 }
 
@@ -318,7 +307,7 @@ errmsg_qsub () {
     cat <<EOF
 Failed to submit job. Check qsub options.
 EOF
-[[ $debug == 1 ]] || ssh $1 "rm -f \$HOME/$tmp_script"
+ssh $1 "rm -f \$HOME/$tmp_script"
 show_cursor
 exit 6
 }
@@ -341,28 +330,30 @@ if [[ -z $user ]]; then
     fi
 fi
 host_gadi=${user}@gadi.nci.org.au
-# write tmp script to start interactive session and get ssh configuration on gadi
+# write tmp script to start the session and get ssh configuration on gadi
 cat > $HOME/$tmp_script <<EOFF
 #!/bin/bash
-command="qsub $pbs_options"
 
-echo -e "Interactive session requested with the following directives:\n'$pbs_options'"
+checkfile=\$HOME/${timestamp}_checkfile
+command="qsub $pbs_options <<< \"touch \$checkfile ; sleep infinity\""
+
+echo -e "Session requested with the following directives:\n'$pbs_options'"
 tmux new -d -s tmux_sess_${timestamp} "\$command"
 
-# Wait until interactive sessions starts
+# Wait until sessions starts
 sleep 0.5
+status=\$(qstat -f | tr '\n' ' ' | grep -Po "Job_Name = ${name}.*?job_state = \K.*?\S")
+[[ -z \$status ]] && exit 6
 k=5
 while true
-do
-    status=\$(qstat -f | tr '\n' ' ' | grep -Po "Job_Name = ${name}.*?job_state = \K.*?\S")
-    if [[ -z \$status ]]; then
-        exit 6
-    elif [[ \$status == R ]]; then
-        echo -e "\033[2K\rInteractive session started!"
+do    
+    if [[ -f \$checkfile ]]; then
+        rm -f \$checkfile
+        echo -e "\033[2K\rSession started!"
         break
     else
         if [[ \$k == 5 ]]; then
-            echo -ne "\033[2K\rWaiting for interactive session to start"
+            echo -ne "\033[2K\rWaiting for the session to start"
             k=0
         else
             echo -n "."
@@ -380,16 +371,16 @@ EOFF
 
 # Copy the tmp script
 scp $HOME/$tmp_script ${host_gadi}:~/ > /dev/null || errmsg_gadi_connection $host_gadi
-[[ $debug == 1 ]] || rm -f $HOME/$tmp_script
+rm -f $HOME/$tmp_script
 
 # run the tmp script on gadi
 hide_cursor
 ssh -X $host_gadi "chmod u+x \$HOME/$tmp_script; \$HOME/$tmp_script" || errmsg_qsub $host_gadi 
 # delete tmp_script on gadi
-[[ $debug == 1 ]] || ssh $host_gadi "rm -f \$HOME/$tmp_script"
+ssh $host_gadi "rm -f \$HOME/$tmp_script"
 show_cursor
 
-hostname=$(ssh $host_gadi "cat \$HOME/$tmp_file ; [[ $debug == 1 ]] || rm -f \$HOME/$tmp_file")
+hostname=$(ssh $host_gadi "cat \$HOME/$tmp_file ; rm -f \$HOME/$tmp_file")
 gadi_home=$(ssh $host_gadi "echo \$HOME")
 echo "Hostname: ${hostname}.gadi.nci.org.au"
 
@@ -399,7 +390,7 @@ echo "Hostname: ${hostname}.gadi.nci.org.au"
 # # Otherwise, include another config file in the ssh-config file, with the specifications of the connection
 
 cat > $HOME/tmp_config <<EOF
-Host interactive_session_${timestamp}
+Host session_${timestamp}
         ProxyJump ${user}@gadi.nci.org.au
         User ${user}
         ForwardX11 true
@@ -409,7 +400,7 @@ EOF
 
 [[ -z $(cat $ssh_config_file | grep "^Include $HOME/tmp_config$") ]] && cat >> $ssh_config_file <<< "Include $HOME/tmp_config"
 # Open VSCode
-code --folder-uri "vscode-remote://ssh-remote+interactive_session_${timestamp}/${gadi_home}"
+code --folder-uri "vscode-remote://ssh-remote+session_${timestamp}/${gadi_home}"
 
 # # Create log file to output stout and sterr from qsub
 
