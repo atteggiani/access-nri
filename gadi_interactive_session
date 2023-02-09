@@ -341,11 +341,9 @@ if [[ -z $user ]]; then
     fi
 fi
 host_gadi=${user}@gadi.nci.org.au
-
 # write tmp script to start interactive session and get ssh configuration on gadi
 cat > $HOME/$tmp_script <<EOFF
 #!/bin/bash
-
 command="qsub $pbs_options"
 
 echo -e "Interactive session requested with the following directives:\n'$pbs_options'"
@@ -356,7 +354,7 @@ sleep 0.5
 k=5
 while true
 do
-    status=\$(qstat -f | tr '\n' ' ' | grep -Po "Job_Name = \${name}.*?job_state = \K.*?\S")
+    status=\$(qstat -f | tr '\n' ' ' | grep -Po "Job_Name = ${name}.*?job_state = \K.*?\S")
     if [[ -z \$status ]]; then
         exit 6
     elif [[ \$status == R ]]; then
@@ -375,7 +373,7 @@ do
 done
 
 # Get hostname
-hostname=\$(qstat -f | tr '\n' ' ' | grep -Po "Job_Name = \${name}.*?exec_host = \K.*?(?=/)")
+hostname=\$(qstat -f | tr '\n' ' ' | grep -Po "Job_Name = ${name}.*?exec_host = \K.*?(?=/)")
 cat > \$HOME/$tmp_file <<< \$hostname
 EOFF
 
