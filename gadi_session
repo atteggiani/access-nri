@@ -142,6 +142,10 @@ while getopts "hP:q:l:M:m:N:-:" opt; do
                 if ! [[ -z $(grep -Po "^walltime=\K.*" <<< $option) ]]; then
                     if [[ -z $walltime ]]; then
                         walltime=$(grep -Po "^walltime=\K.*" <<< $option)
+			if [[ $(echo $walltime | awk -F: '{ print ($1 * 3600) + ($2 * 60) + $3 }') -le 180 ]]; then
+				echo "The requested walltime=$walltime is too little for the session to start. Please request more time."
+				exit 1
+			fi
                     else
                         echo "Multiple '-l walltime' directives specified."
                         exit 1
@@ -334,8 +338,10 @@ host_gadi=${user}@gadi.nci.org.au
 cat > $HOME/$tmp_script <<EOFF
 #!/bin/bash
 
+session_dir=\$HOME/.vscode_sessions/$timestamp
+mkdir -p \$session_dir
 checkfile=\$HOME/${timestamp}_checkfile
-command="qsub $pbs_options <<< \"touch \$checkfile ; sleep infinity\""
+command="qsub $pbs_options -o \$session_dir/${timestamp}.o -e \$session_dir/${timetamp}.e  <<< \"touch \$checkfile; sleep infinity\""
 
 echo -e "Session requested with the following directives:\n'$pbs_options'"
 tmux new -d -s tmux_sess_${timestamp} "\$command"

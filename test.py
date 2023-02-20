@@ -1,30 +1,19 @@
 import numpy as np
 import xarray as xr
 import os
-import mule
 from matplotlib import pyplot as plt
+import itertools
+import numpy as np
+import pandas as pd
+import random
+import time
 
-def plot(x):
-    plt.figure()
-    plt.pcolormesh(x.get_data())
-    plt.axis("tight")
-    plt.colorbar()
-
-file="veg_modified.nc"
-ancil_file = "/g/data/tm70/dm5220/scripts/abhik/veg_original"
-
-ancil=mule.AncilFile.from_file(ancil_file)
-ancil_modif=ancil.copy(include_fields=True)
-
-d=xr.open_dataset(file).squeeze()
-k=0
-for v in d.data_vars:
-    cond=d[v]
-    data=cond.values
-    
-    for i in range(data.shape[0]):
-        ancil_modif.fields[k+i].set_data_provider(mule.ArrayDataProvider(data[i,...]))
-    k+=data.shape[0]
-
-[newfile=os.path.splitext(file)[0]
-ancil_modif.to_file(newfile)]
+from matplotlib import pyplot as plt
+from matplotlib.colors import Colormap as cm
+data = [ [900.399, 980.142, 0.78], [922.252, 880.885, 0.68], [724.311, 780.543, 0.58], [523.195, 582.994, 0.46], [623.431, 680.427, 0.76], [926.363, 881.791, 1.81], [722.942, 783.257, 0.75], [223.751, 279.995, 0.16], [723.215, 781.004, 0.64], [724.541, 779.889, 0.55] ]
+x=[d[0] for d in data]
+y=[d[1] for d in data]
+t=[d[2] for d in data]
+plt.contourf(x,y,t,
+    cmap=)
+plt.colorbar()
