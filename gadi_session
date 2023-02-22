@@ -9,7 +9,7 @@ PROGNAME="$0"
 usage() {
   cat << EOF
 
-Script to start a session on gadi and connect to it through VSCode (using VSCode remote-ssh extension).
+Script to be used from your local machine to start a session on gadi and connect to it through VSCode (using VSCode remote-ssh extension).
 
 Usage: $PROGNAME [ PBS-directives ] [ --user <Gadi User> ] [ --ssh-config <ssh-config file> ] [ --code <path to 'code' executable> ] [ --help ]
 
