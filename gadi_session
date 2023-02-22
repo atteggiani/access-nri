@@ -136,7 +136,7 @@ while getopts "hP:q:l:M:m:N:-:" opt; do
             pbs_options+="-${opt} $OPTARG "
         ;;
         l)
-            grep -P "[ \t]" <<< "$OPTARG" > /dev/null && echo -e "'-l' directives cannot contain spaces or tabs.\nIf you need to declare multiple '-l' directives, please separate them with a comma."
+            grep -P "[ \t]" <<< "$OPTARG" > /dev/null && echo -e "'-l' directives cannot contain spaces.\nIf you need to declare multiple '-l' directives, please separate them with a comma."
             for option in $(awk 'BEGIN { FS="," } ; { for (i=1; i<=NF; i++) { print($i) }}' <<< "$OPTARG")
             do  
                 if ! [[ -z $(grep -Po "^walltime=\K.*" <<< $option) ]]; then
@@ -309,17 +309,17 @@ exit 5
 
 errmsg_qsub () {
     cat <<EOF
-Failed to submit job. Check qsub options.
+Failed to submit job. Try again or check qsub options.
 EOF
 ssh $1 "rm -f \$HOME/$tmp_script"
 show_cursor
 exit 6
 }
 
+# If no ssh-config file specified, set ssh-config file to ~/.ssh/config
+[[ -z "$ssh_config_file" ]] && ssh_config_file=$HOME/.ssh/config
 # If User was not specified
 if [[ -z $user ]]; then
-    # If no ssh-config file specified, set ssh-config file to ~/.ssh/config
-    [[ -z "$ssh_config_file" ]] && ssh_config_file=$HOME/.ssh/config
     # If a config file exists
     if [[ -f "$ssh_config_file" ]]; then
         # Get gadi User
