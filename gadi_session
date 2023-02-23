@@ -136,51 +136,62 @@ while getopts "hP:q:l:M:m:N:-:" opt; do
             pbs_options+="-${opt} $OPTARG "
         ;;
         l)
-            grep -P "[ \t]" <<< "$OPTARG" > /dev/null && echo -e "'-l' directives cannot contain spaces.\nIf you need to declare multiple '-l' directives, please separate them with a comma."
-            for option in $(awk 'BEGIN { FS="," } ; { for (i=1; i<=NF; i++) { print($i) }}' <<< "$OPTARG")
+            # Check that -l directives don't contain spaces 
+            if [[ "$OPTARG" =~ [[:blank:]] ]]; then
+                echo -e "'-l' directives cannot contain spaces.\nIf you need to declare multiple '-l' directives, please separate them with a comma."
+                exit 1
+            fi
+            #  cicle through multiple -l options separated by a comma
+            for option in $(tr ',' ' ' <<< "$OPTARG")
             do  
-                if ! [[ -z $(grep -Po "^walltime=\K.*" <<< $option) ]]; then
+                # Walltime
+                if [[ $option =~ ^walltime=(.+) ]]; then
                     if [[ -z $walltime ]]; then
-                        walltime=$(grep -Po "^walltime=\K.*" <<< $option)
-			if [[ $(echo $walltime | awk -F: '{ print ($1 * 3600) + ($2 * 60) + $3 }') -le 180 ]]; then
-				echo "The requested walltime=$walltime is too little for the session to start. Please request more time."
-				exit 1
-			fi
+                        walltime=${BASH_REMATCH[1]}
+                        # Check that walltime has good format
+                        if ! [[ $walltime =~ ^(([[:digit:]]+:)?[[:digit:]]+:)?[[:digit:]]+$ ]]; then
+                            echo -e "'$walltime' is an invalid walltime.\nWalltime needs to be in the format [[hours:]minutes:]seconds."
+                            exit 1                        # Check that walltime is not too little
+                        fi
+                        if [[ $(awk -F: '{ print ($1 * 3600) + ($2 * 60) + $3 }' <<< $walltime) -le 180 ]]; then
+                            echo "The requested walltime=$walltime is too little for the session to start. Please request more time."
+                            exit 1
+                        fi
                     else
                         echo "Multiple '-l walltime' directives specified."
                         exit 1
                     fi
-                elif ! [[ -z $(grep -Po "^storage=\K.*" <<< $option) ]]; then
+                elif [[ $option =~ ^storage=(.+) ]]; then
                     if [[ -z $storage ]]; then
-                        storage=$(grep -Po "^storage=\K.*" <<< $option)
+                        storage=${BASH_REMATCH[1]}
                     else
                         echo "Multiple '-l storage' directives specified."
                         exit 1
                     fi
-                elif ! [[ -z $(grep -Po "^mem=\K.*" <<< $option) ]]; then
+                elif [[ $option =~ ^mem=(.+) ]]; then
                     if [[ -z $mem ]]; then
-                        mem=$(grep -Po "^mem=\K.*" <<< $option)
+                        mem=${BASH_REMATCH[1]}
                     else
                         echo "Multiple '-l mem' directives specified."
                         exit 1
                     fi
-                elif ! [[ -z $(grep -Po "^ncpus=\K.*" <<< $option) ]]; then
+                elif [[ $option =~ ^ncpus=(.+) ]]; then
                     if [[ -z $ncpus ]]; then
-                        ncpus=$(grep -Po "^ncpus=\K.*" <<< $option)
+                        ncpus=${BASH_REMATCH[1]}
                     else
                         echo "Multiple '-l ncpus' directives specified."
                         exit 1
                     fi
-                elif ! [[ -z $(grep -Po "^ngpus=\K.*" <<< $option) ]]; then
+                elif [[ $option =~ ^ngpus=(.+) ]]; then
                     if [[ -z $ngpus ]]; then
-                        ngpus=$(grep -Po "^ngpus=\K.*" <<< $option)
+                        ngpus=${BASH_REMATCH[1]}
                     else
                         echo "Multiple '-l ngpus' directives specified."
                         exit 1
                     fi
-                elif ! [[ -z $(grep -Po "^jobfs=\K.*" <<< $option) ]]; then
+                elif [[ $option =~ ^jobfs=(.+) ]]; then
                     if [[ -z $jobfs ]]; then
-                        jobfs=$(grep -Po "^jobfs=\K.*" <<< $option)
+                        jobfs=${BASH_REMATCH[1]}
                     else
                         echo "Multiple '-l jobfs' directives specified."
                         exit 1
@@ -199,6 +210,18 @@ while getopts "hP:q:l:M:m:N:-:" opt; do
         ;;
     esac
 done
+shift $(($OPTIND - 1))
+
+check_invalid_argument () {
+    [[ -z "$@" ]] || errmsg_invalid_argument "$@"    
+}
+
+errmsg_invalid_argument () {
+    cat << EOF
+Invalid argument provided. '$@' is not a valid option.
+EOF
+    exit 1
+}
 
 # Check that VSCode and remote-ssh are installed:
 errmsg_no_vscode () {
@@ -208,15 +231,19 @@ If VSCode is installed, please specify the path to the CLI 'code' executable wit
 $PROGNAME --code <path to 'code' executable>
 Otherwise, please install VSCode --> https://code.visualstudio.com/download
 EOF
-    exit 7
+    exit 1
 }
 
 errmsg_no_code_executable () {
     cat << EOF
 No VSCode '$code_bin' executable found.
 EOF
-    exit 8
+    exit 1
 }
+
+# Check that no other arguments are provided 
+check_invalid_argument "$@"
+
 
 if [[ -z "$code_bin" ]]; then
     code_bin=code
@@ -227,7 +254,7 @@ fi
 code -v &> /dev/null || errmsg_no_vscode $code_bin
 # Check that remote-ssh extension is installed, otherwise install it
 remote_ssh_id=ms-vscode-remote.remote-ssh
-if [[ -z $(code --list-extensions | grep "^$remote_ssh_id$") ]]; then
+if ! [[ $(code --list-extensions) =~ $remote_ssh_id ]]; then
     echo -e "No 'remote-ssh' extension found in VSCode."
     $code_bin --install-extension $remote_ssh_id
 fi
@@ -278,7 +305,7 @@ Failed to understand the gadi.nci.org.au 'User' from the $ssh_config_file file.
 To specify a User use the '--user <user>' flag.
 Type $PROGNAME -h for the complete usage doc.
 EOF
-exit 2
+exit 1
 }
 
 errmsg_no_config_file () {
@@ -287,16 +314,7 @@ No $ssh_config_file found.
 To specify a custom ssh config file use the '--ssh-config <path to ssh-config file>' flag.
 Type $PROGNAME -h for the complete usage doc.
 EOF
-exit 3
-}
-
-ermmsg_multiple_user () {
-    cat << EOF
-Multiple gadi.nci.org.au Users found in the $ssh_config_file file. 
-To specify a User use the '--user <user>' flag.
-Type $PROGNAME -h for the complete usage doc.
-EOF
-exit 4
+exit 1
 }
 
 errmsg_gadi_connection () {
@@ -304,7 +322,7 @@ errmsg_gadi_connection () {
 Impossible to connect to $1. Check your $ssh_config_file file.
 EOF
 rm -f $HOME/$tmp_script
-exit 5
+exit 1
 }
 
 errmsg_qsub () {
@@ -313,7 +331,26 @@ Failed to submit job. Try again or check qsub options.
 EOF
 ssh $1 "rm -f \$HOME/$tmp_script"
 show_cursor
-exit 6
+exit 1
+}
+
+get_user_from_config_file () {
+    local user=()
+    str=$(tr '\n' ' ' < $ssh_config_file | awk -F "Host " '{ for (i=1; i<=NF; i++) { if ($i ~ /[ \t]+[^#]*[ \t]+Hostname[ \t]+gadi\.nci\.org\.au[ \t]+/) { print $i }}}' | tr '\n' ' ')
+    while [[ $str =~ [^\#][[:blank:]]+(User[[:blank:]]([[:alnum:]]+)) ]]; do
+        user+=(${BASH_REMATCH[2]})
+        str=${str/"${BASH_REMATCH[1]}"/}
+    done
+    if [[ -n ${user[0]} ]]; then
+        for i in ${user[@]}; do
+            if [[ $i != ${user[0]} ]]; then
+                ermmsg_no_user
+            fi
+        done
+    else
+        ermmsg_no_user
+    fi
+    echo $user
 }
 
 # If no ssh-config file specified, set ssh-config file to ~/.ssh/config
@@ -323,16 +360,13 @@ if [[ -z $user ]]; then
     # If a config file exists
     if [[ -f "$ssh_config_file" ]]; then
         # Get gadi User
-        user=$(cat $ssh_config_file | tr '\n' ' ' | awk 'BEGIN { FS = "Host " } ; { for (i=1; i<=NF; i++) { if ($i ~ /[ \t]+[^#]*[ \t]+Hostname[ \t]+gadi\.nci\.org\.au[ \t]+/) { print $i }}}' | grep -Po ".*?User[ \t]*\K\S*")
-        # If no user found raise error
-        [[ -z "$user" ]] && ermmsg_no_user
-        # If more than one user found raise error
-        [[ -z $(echo $user | grep -P "\s") ]] || ermmsg_multiple_user
+        user=$(get_user_from_config_file)
     else
         # If no config file raise error
         errmsg_no_config_file    
     fi
 fi
+
 host_gadi=${user}@gadi.nci.org.au
 # write tmp script to start the session and get ssh configuration on gadi
 cat > $HOME/$tmp_script <<EOFF
@@ -343,16 +377,26 @@ mkdir -p \$session_dir
 checkfile=\$HOME/${timestamp}_checkfile
 command="qsub $pbs_options -o \$session_dir/${timestamp}.o -e \$session_dir/${timetamp}.e  <<< \"touch \$checkfile; sleep infinity\""
 
-echo -e "Session requested with the following directives:\n'$pbs_options'"
+echo -e "Session requested with the following directives:\n'${pbs_options% }'"
 tmux new -d -s tmux_sess_${timestamp} "\$command"
 
 # Wait until sessions starts
-sleep 0.5
-status=\$(qstat -f | tr '\n' ' ' | grep -Po "Job_Name = ${name}.*?job_state = \K.*?\S")
-[[ -z \$status ]] && exit 6
+k=0
+while true; do
+    sleep 0.5
+    status=\$(qstat -f | tr '\n' ' ' | grep -Po "Job_Name = ${name}.*?job_state = \K.*?\S")
+    if [[ -n \$status ]]; then
+        break
+    elif [[ \$k -le 4 ]]; then
+        k+=1
+        continue
+    else
+        exit 1
+    fi
+done
+
 k=5
-while true
-do    
+while true; do    
     if [[ -f \$checkfile ]]; then
         rm -f \$checkfile
         echo -e "\033[2K\rSession started!"
@@ -381,10 +425,10 @@ rm -f $HOME/$tmp_script
 
 # run the tmp script on gadi
 hide_cursor
-ssh -X $host_gadi "chmod u+x \$HOME/$tmp_script; \$HOME/$tmp_script" || errmsg_qsub $host_gadi 
+ssh -X $host_gadi "chmod u+x \$HOME/$tmp_script; \$HOME/$tmp_script" || errmsg_qsub $host_gadi
+show_cursor
 # delete tmp_script on gadi
 ssh $host_gadi "rm -f \$HOME/$tmp_script"
-show_cursor
 
 hostname=$(ssh $host_gadi "cat \$HOME/$tmp_file ; rm -f \$HOME/$tmp_file")
 gadi_home=$(ssh $host_gadi "echo \$HOME")
@@ -407,6 +451,3 @@ EOF
 [[ -z $(cat $ssh_config_file | grep "^Include $HOME/tmp_config$") ]] && cat >> $ssh_config_file <<< "Include $HOME/tmp_config"
 # Open VSCode
 code --folder-uri "vscode-remote://ssh-remote+session_${timestamp}/${gadi_home}"
-
-# # Create log file to output stout and sterr from qsub
-
