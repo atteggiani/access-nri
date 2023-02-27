@@ -1,0 +1,19 @@
+Host *
+    AddKeysToAgent yes
+    UseKeychain yes
+    IdentityFile ~/.ssh/id_rsa
+Host         access
+    HostName     accessdev.nci.org.au
+    User         sb8430
+    ForwardX11   true
+    ForwardAgent true
+Host         gadi
+    HostName     gadi.nci.org.au
+    User         sb8430
+    ForwardX11   true
+    ForwardAgent true
+Host         gadi
+    HostName     gadi.nci.org.au
+    User         ciaone
+    ForwardX11   true
+    ForwardAgent true

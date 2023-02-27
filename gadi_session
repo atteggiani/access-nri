@@ -299,7 +299,7 @@ hide_cursor () {
     tput civis
 }
 
-ermmsg_no_user () {
+errmsg_no_user () {
     cat << EOF
 Failed to understand the gadi.nci.org.au 'User' from the $ssh_config_file file. 
 To specify a User use the '--user <user>' flag.
@@ -336,19 +336,14 @@ exit 1
 
 get_user_from_config_file () {
     local user=()
-    str=$(tr '\n' ' ' < $ssh_config_file | awk -F "Host " '{ for (i=1; i<=NF; i++) { if ($i ~ /[ \t]+[^#]*[ \t]+Hostname[ \t]+gadi\.nci\.org\.au[ \t]+/) { print $i }}}' | tr '\n' ' ')
-    while [[ $str =~ [^\#][[:blank:]]+(User[[:blank:]]([[:alnum:]]+)) ]]; do
-        user+=(${BASH_REMATCH[2]})
-        str=${str/"${BASH_REMATCH[1]}"/}
-    done
-    if [[ -n ${user[0]} ]]; then
-        for i in ${user[@]}; do
+    user=($(cat $ssh_config_file | tr '\n' ' ' | tr '\t' ' ' | tr -s ' ' | awk -F "Host " '{ for (i=1; i<=NF; i++) { if ($i ~ /[^#] Host[nN]ame gadi\.nci\.org\.au /) { if (match($i,/[^#] User [[:alnum:]]+/)) { print substr($i,RSTART+7,RLENGTH-7) }}}}'))
+    [[ -n $user ]] || errmsg_no_user
+    if [[ ${#user[@]} > 1 ]]; then
+        for i in ${user[@]:1:${#user[@]}-1}}; do
             if [[ $i != ${user[0]} ]]; then
-                ermmsg_no_user
+                errmsg_no_user
             fi
         done
-    else
-        ermmsg_no_user
     fi
     echo $user
 }
