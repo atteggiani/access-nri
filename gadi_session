@@ -339,7 +339,7 @@ get_user_from_config_file () {
     user=($(cat $ssh_config_file | tr '\n' ' ' | tr '\t' ' ' | tr -s ' ' | awk -F "Host " '{ for (i=1; i<=NF; i++) { if ($i ~ /[^#] Host[nN]ame gadi\.nci\.org\.au /) { if (match($i,/[^#] User [[:alnum:]]+/)) { print substr($i,RSTART+7,RLENGTH-7) }}}}'))
     [[ -n $user ]] || errmsg_no_user
     if [[ ${#user[@]} > 1 ]]; then
-        for i in ${user[@]:1:${#user[@]}-1}}; do
+        for i in ${user[@]:1:${#user[@]}-1}; do
             if [[ $i != ${user[0]} ]]; then
                 errmsg_no_user
             fi
