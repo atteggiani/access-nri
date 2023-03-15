@@ -372,7 +372,7 @@ session_dir=\$HOME/.vscode_sessions/$timestamp
 mkdir -p \$session_dir
 cat > \$session_dir/code_command <<< "code --folder-uri vscode-remote://ssh-remote+session_${timestamp}/${gadi_home}"
 checkfile=\$HOME/${timestamp}_checkfile
-command="qsub $pbs_options -o \$session_dir/${timestamp}.o -e \$session_dir/${timetamp}.e  <<< \"touch \$checkfile; sleep infinity\""
+command="qsub $pbs_options -o \$session_dir/${timestamp}.o -e \$session_dir/${timestamp}.e  <<< \"touch \$checkfile; sleep infinity\""
 
 echo -e "Session requested with the following directives:\n'${pbs_options% }'"
 tmux new -d -s tmux_sess_${timestamp} "\$command"
