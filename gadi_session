@@ -363,12 +363,14 @@ if [[ -z $user ]]; then
 fi
 
 host_gadi=${user}@gadi.nci.org.au
+gadi_home=$(ssh $host_gadi "echo \$HOME")
 # write tmp script to start the session and get ssh configuration on gadi
 cat > $HOME/$tmp_script <<EOFF
 #!/bin/bash
 
 session_dir=\$HOME/.vscode_sessions/$timestamp
 mkdir -p \$session_dir
+cat > \$session_dir/code_command <<< "code --folder-uri vscode-remote://ssh-remote+session_${timestamp}/${gadi_home}"
 checkfile=\$HOME/${timestamp}_checkfile
 command="qsub $pbs_options -o \$session_dir/${timestamp}.o -e \$session_dir/${timetamp}.e  <<< \"touch \$checkfile; sleep infinity\""
 
@@ -426,7 +428,6 @@ show_cursor
 ssh $host_gadi "rm -f \$HOME/$tmp_script"
 
 hostname=$(ssh $host_gadi "cat \$HOME/$tmp_file ; rm -f \$HOME/$tmp_file")
-gadi_home=$(ssh $host_gadi "echo \$HOME")
 echo "Hostname: ${hostname}.gadi.nci.org.au"
 
 # # If it's possible to run a Proxyjump directly from CLI via vscode use something like this:
