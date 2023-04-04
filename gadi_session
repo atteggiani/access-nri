@@ -99,7 +99,7 @@ while getopts "hP:q:l:M:m:N:-:" opt; do
                     exit
                 ;;
                 user)
-                    if ! [[ -z ${!OPTIND} ]]; then
+                    if [[ -n ${!OPTIND} ]]; then
                         user=${!OPTIND}
                         shift 
                     else
@@ -108,7 +108,7 @@ while getopts "hP:q:l:M:m:N:-:" opt; do
                     fi
                 ;;
                 ssh-config)
-                    if ! [[ -z ${!OPTIND} ]]; then
+                    if [[ -n ${!OPTIND} ]]; then
                         ssh_config_file=${!OPTIND}
                         shift 
                     else
@@ -117,7 +117,7 @@ while getopts "hP:q:l:M:m:N:-:" opt; do
                     fi
                 ;;                
                 code)
-                    if ! [[ -z ${!OPTIND} ]]; then
+                    if [[ -n ${!OPTIND} ]]; then
                         code_bin=${!OPTIND}
                         shift 
                     else
@@ -471,6 +471,6 @@ Host ${name}
 # $cmd
 EOF
 
-[[ -z $(cat $ssh_config_file | grep "^Include $tmp_config_file$") ]] && cat >> $ssh_config_file <<< "Include $tmp_config_file"
+grep "^Include $tmp_config_file$" $ssh_config_file || cat >> $ssh_config_file <<< "Include $tmp_config_file"
 # Open VSCode
 eval "$cmd"
