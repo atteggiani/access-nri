@@ -467,7 +467,7 @@ Host ${name}
         ForwardX11 true
         ForwardX11Trusted yes
         Hostname ${hostname}
-#$cmd
+# $cmd
 EOF
 
 [[ -z $(cat $ssh_config_file | grep "^Include $tmp_config_file$") ]] && cat >> $ssh_config_file <<< "Include $tmp_config_file"
