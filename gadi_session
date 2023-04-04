@@ -140,6 +140,7 @@ while getopts "hP:q:l:M:m:N:-:" opt; do
                 *)
                     echo "${PROGNAME}: illegal option -- ${OPTARG}"
                     echo "Type $PROGNAME -h for the complete usage doc."
+                    exit
                 ;;
             esac
         ;;
