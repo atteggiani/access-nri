@@ -11,7 +11,7 @@ usage() {
 
 Script to be used from your local machine to start a session on gadi and connect to it through VSCode (using VSCode remote-ssh extension).
 
-Usage: $PROGNAME [ PBS-directives ] [ --user <Gadi User> ] [ --ssh-config <ssh-config file> ] [ --code <path to 'code' executable> ] [ --help ]
+Usage: $PROGNAME [ PBS-directives ] [ --reconnect ] [ --user <Gadi User> ] [ --ssh-config <ssh-config file> ] [ --code <path to 'code' executable> ] [ --folder | --workspace ] [ --help ]
 
 Keywords:
     --user <Gadi User> 
@@ -22,6 +22,15 @@ Keywords:
 
     --code <path to 'code' executable>
         Specify VSCode's CLI 'code' executable file, if not in PATH.
+
+    --reconnect 
+        Reconnects to the last opened session.
+    
+    --folder
+        Path of the folder on Gadi to connect to. Default is Gadi's \$HOME directory.
+    
+    --workspace
+        Path of the VSCode workspace on Gadi to connect to.
 
     -h, --help
         Print this manual.
@@ -79,11 +88,16 @@ Keywords:
 EOF
   exit 1
 }
+tmp_config_file=$HOME/.tmp_config
 
 while getopts "hP:q:l:M:m:N:-:" opt; do
     case $opt in
         -)  
             case $OPTARG in
+                reconnect)
+                    eval $(awk '/#/{$1="";print $0}' $tmp_config_file)
+                    exit
+                ;;
                 user)
                     if ! [[ -z ${!OPTIND} ]]; then
                         user=${!OPTIND}
@@ -110,6 +124,15 @@ while getopts "hP:q:l:M:m:N:-:" opt; do
                         echo "${PROGNAME}: option requires an argument -- ${OPTARG}"
                         echo "Type $PROGNAME -h for the complete usage doc."
                     fi
+                ;;
+                folder)
+                    gadi_folder=${!OPTIND}
+                    shift
+                ;;
+                workspace)
+                    gadi_folder=${!OPTIND}
+                    uri_type=--file-uri
+                    shift
                 ;;
                 help)
                     usage
@@ -203,8 +226,6 @@ while getopts "hP:q:l:M:m:N:-:" opt; do
                 pbs_options+="-${opt} $option "
             done
         ;;
-        I)
-        ;;
         h) 
             usage
         ;;
@@ -244,7 +265,6 @@ EOF
 # Check that no other arguments are provided 
 check_invalid_argument "$@"
 
-
 if [[ -z "$code_bin" ]]; then
     code_bin=code
 else
@@ -269,7 +289,7 @@ if [[ -z "$queue" ]]; then
 fi
 # If name is not specified, set to ${timestamp}_session
 if [[ -z "$name" ]]; then
-    name=${timestamp}_session
+    name=session_${timestamp}
     pbs_options+="-N $name "
 fi
 # If walltime is not specified, set to 01:00:00
@@ -287,6 +307,7 @@ if [[ -z "$mem" ]]; then
     mem=9GB
     pbs_options+="-l mem=$mem "
 fi
+[[ -n $uri_type ]] || uri_type=--folder-uri
 
 tmp_script=tmp_script_${timestamp}
 tmp_file=tmp_file_${timestamp}
@@ -363,14 +384,19 @@ if [[ -z $user ]]; then
 fi
 
 host_gadi=${user}@gadi.nci.org.au
-gadi_home=$(ssh $host_gadi "echo \$HOME")
+[[ -z "$gadi_folder" ]] && gadi_folder=$(ssh $host_gadi "echo \$HOME")
+# command to launch vscode in remote
+cmd="code $uri_type \"vscode-remote://ssh-remote+${name}/${gadi_folder}\""
+
 # write tmp script to start the session and get ssh configuration on gadi
 cat > $HOME/$tmp_script <<EOFF
 #!/bin/bash
 
 session_dir=\$HOME/.vscode_sessions/$timestamp
 mkdir -p \$session_dir
-cat > \$session_dir/code_command <<< "code --folder-uri vscode-remote://ssh-remote+session_${timestamp}/${gadi_home}"
+cat > \$session_dir/code_command <<EOF 
+$cmd 
+EOF
 checkfile=\$HOME/${timestamp}_checkfile
 command="qsub $pbs_options -o \$session_dir/${timestamp}.o -e \$session_dir/${timestamp}.e  <<< \"touch \$checkfile; sleep infinity\""
 
@@ -428,22 +454,22 @@ show_cursor
 ssh $host_gadi "rm -f \$HOME/$tmp_script"
 
 hostname=$(ssh $host_gadi "cat \$HOME/$tmp_file ; rm -f \$HOME/$tmp_file")
-echo "Hostname: ${hostname}.gadi.nci.org.au"
+echo "Connection to ${user}@${hostname}.gadi.nci.org.au:${gadi_folder}"
 
 # # If it's possible to run a Proxyjump directly from CLI via vscode use something like this:
 # # echo "code --folder-uri vscode-remote://ssh-remote+-J+${user}@gadi.nci.org.au+${user}@${hostname}.gadi.nci.org.au"
-
 # # Otherwise, include another config file in the ssh-config file, with the specifications of the connection
 
-cat > $HOME/tmp_config <<EOF
-Host session_${timestamp}
+cat > $HOME/.tmp_config <<EOF
+Host ${name}
         ProxyJump ${user}@gadi.nci.org.au
         User ${user}
         ForwardX11 true
         ForwardX11Trusted yes
         Hostname ${hostname}
+#$cmd
 EOF
 
-[[ -z $(cat $ssh_config_file | grep "^Include $HOME/tmp_config$") ]] && cat >> $ssh_config_file <<< "Include $HOME/tmp_config"
+[[ -z $(cat $ssh_config_file | grep "^Include $tmp_config_file$") ]] && cat >> $ssh_config_file <<< "Include $tmp_config_file"
 # Open VSCode
-code --folder-uri "vscode-remote://ssh-remote+session_${timestamp}/${gadi_home}"
+eval "$cmd"
