@@ -1,19 +1,37 @@
+#!/usr/bin/env python
 import numpy as np
-import xarray as xr
-import os
-from matplotlib import pyplot as plt
-import itertools
-import numpy as np
-import pandas as pd
-import random
-import time
 
-from matplotlib import pyplot as plt
-from matplotlib.colors import Colormap as cm
-data = [ [900.399, 980.142, 0.78], [922.252, 880.885, 0.68], [724.311, 780.543, 0.58], [523.195, 582.994, 0.46], [623.431, 680.427, 0.76], [926.363, 881.791, 1.81], [722.942, 783.257, 0.75], [223.751, 279.995, 0.16], [723.215, 781.004, 0.64], [724.541, 779.889, 0.55] ]
-x=[d[0] for d in data]
-y=[d[1] for d in data]
-t=[d[2] for d in data]
-plt.contourf(x,y,t,
-    cmap=)
-plt.colorbar()
+def calculate_z_score(arr):
+    mean = np.mean(arr)
+    std_dev = np.std(arr)
+    z_scores = [(s - mean) / std_dev for s in arr]
+    return z_scores
+
+gpa={
+    'a':4.0,
+    'a-':3.7,
+    'b+':3.3,
+    'b':3.0,
+    'b-':2.7,
+    'c+':2.3,
+    'c':2.0,
+    'c-':1.7,
+    'd+':1.3,
+    'd':1.0,
+    'd-':0.7,
+    'f':0
+}
+
+num = int(input("How many students took your course? : "))
+print ("What was the grade for each student?: ")
+convert = []
+
+for i,n in enumerate(range(num)):
+    mark=input(f'Student {i+1}: ').lower()
+    try:
+        convert.append(gpa[mark])
+    except KeyError:
+        convert.append(0)
+
+result = calculate_z_score(convert)
+print(result)

@@ -263,55 +263,6 @@ EOF
     exit 1
 }
 
-# Check that no other arguments are provided 
-check_invalid_argument "$@"
-
-if [[ -z "$code_bin" ]]; then
-    code_bin=code
-else
-    [[ -f "$code_bin" ]] || errmsg_no_code_executable
-fi
-    
-code -v &> /dev/null || errmsg_no_vscode $code_bin
-# Check that remote-ssh extension is installed, otherwise install it
-remote_ssh_id=ms-vscode-remote.remote-ssh
-if ! [[ $(code --list-extensions) =~ $remote_ssh_id ]]; then
-    echo -e "No 'remote-ssh' extension found in VSCode."
-    $code_bin --install-extension $remote_ssh_id
-fi
-
-timestamp=$(date +%s)
-
-# DEFAULT VALUES
-# If queue is not specified, use 'normalbw'
-if [[ -z "$queue" ]]; then
-    queue=normalbw
-    pbs_options+="-q $queue "
-fi
-# If name is not specified, set to ${timestamp}_session
-if [[ -z "$name" ]]; then
-    name=session_${timestamp}
-    pbs_options+="-N $name "
-fi
-# If walltime is not specified, set to 01:00:00
-if [[ -z "$walltime" ]]; then
-    walltime=01:00:00
-    pbs_options+="-l walltime=$walltime "
-fi
-# If ncpus is not specified, set to 2
-if [[ -z "$ncpus" ]]; then
-    ncpus=2
-    pbs_options+="-l ncpus=$ncpus "
-fi
-# If mem is not specified, set to 9GB
-if [[ -z "$mem" ]]; then
-    mem=9GB
-    pbs_options+="-l mem=$mem "
-fi
-[[ -n $uri_type ]] || uri_type=--folder-uri
-
-tmp_script=tmp_script_${timestamp}
-tmp_file=tmp_file_${timestamp}
 
 show_cursor () {
     tput cvvis
@@ -369,6 +320,56 @@ get_user_from_config_file () {
     fi
     echo $user
 }
+
+# Check that no other arguments are provided 
+check_invalid_argument "$@"
+
+if [[ -z "$code_bin" ]]; then
+    code_bin=code
+else
+    [[ -f "$code_bin" ]] || errmsg_no_code_executable
+fi
+    
+code -v &> /dev/null || errmsg_no_vscode $code_bin
+# Check that remote-ssh extension is installed, otherwise install it
+remote_ssh_id=ms-vscode-remote.remote-ssh
+if ! [[ $(code --list-extensions) =~ $remote_ssh_id ]]; then
+    echo -e "No 'remote-ssh' extension found in VSCode."
+    $code_bin --install-extension $remote_ssh_id
+fi
+
+timestamp=$(date +%s)
+
+# DEFAULT VALUES
+# If queue is not specified, use 'normalbw'
+if [[ -z "$queue" ]]; then
+    queue=normalbw
+    pbs_options+="-q $queue "
+fi
+# If name is not specified, set to ${timestamp}_session
+if [[ -z "$name" ]]; then
+    name=session_${timestamp}
+    pbs_options+="-N $name "
+fi
+# If walltime is not specified, set to 01:00:00
+if [[ -z "$walltime" ]]; then
+    walltime=01:00:00
+    pbs_options+="-l walltime=$walltime "
+fi
+# If ncpus is not specified, set to 2
+if [[ -z "$ncpus" ]]; then
+    ncpus=2
+    pbs_options+="-l ncpus=$ncpus "
+fi
+# If mem is not specified, set to 9GB
+if [[ -z "$mem" ]]; then
+    mem=9GB
+    pbs_options+="-l mem=$mem "
+fi
+[[ -n $uri_type ]] || uri_type=--folder-uri
+
+tmp_script=tmp_script_${timestamp}
+tmp_file=tmp_file_${timestamp}
 
 # If no ssh-config file specified, set ssh-config file to ~/.ssh/config
 [[ -z "$ssh_config_file" ]] && ssh_config_file=$HOME/.ssh/config
